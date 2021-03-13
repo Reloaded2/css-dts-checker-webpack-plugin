@@ -1,8 +1,10 @@
 import webpack from "webpack";
 import glob from "glob";
+import { compile } from "./TsCompiler";
+import path from "path";
 
 interface Options {
-  files: [];
+  files: string | null;
 }
 class CssDtsCheckerWebpackPlugin {
   /**
@@ -11,9 +13,9 @@ class CssDtsCheckerWebpackPlugin {
   static readonly version: string = "{{VERSION}}"; // will be replaced by the @semantic-release/exec
 
   private readonly options: Options;
-  private readonly errors: { message: string }[];
+  private readonly errors: { messages: string[]; file: string }[];
 
-  constructor(options: Options = { files: [] }, errors: []) {
+  constructor(options: Options = { files: null }, errors: []) {
     this.options = options || {};
     this.errors = errors || [];
   }
@@ -26,8 +28,6 @@ class CssDtsCheckerWebpackPlugin {
     const options = this.options;
     let errors = this.errors;
 
-    console.log("jojo start");
-
     // throw new Error(
     //   `ForkTsCheckerWebpackPlugin is configured to not use any issue reporter. It's probably a configuration issue.`
     // );
@@ -38,45 +38,52 @@ class CssDtsCheckerWebpackPlugin {
       //   { message: "und hier ist auch alles flasch" },
       // ];
 
-      if (options.files === undefined) {
-        errors = [{ message: "files not found" }];
+      if (options.files === null) {
+        errors = [{ messages: ["files not found"], file: "" }];
+      } else {
+        // glob(options.files, {}, (_er, files) => {
+
+        //   console.log(files);
+        // });
+
+        const notFoundedCssClasses = compile(
+          [
+            "./src/Core/components/Tickets/index.tsx",
+            "./src/Core/components/Tickets/index.tsx",
+          ],
+          {}
+        );
+
+        if (notFoundedCssClasses.length > 0) {
+          errors = notFoundedCssClasses.map((item) => ({
+            messages: item.classes,
+            file: item.file,
+          }));
+        }
       }
-      // glob(options.files, {}, function (_er, files) {
-      //   console.log(files);
-      //   // files is an array of filenames.
-      //   // If the `nonull` option is set, and nothing
-      //   // was found, then files is ["**/*.js"]
-      //   // er is an error object or null.
-      // });
     };
 
     compiler.hooks.emit.tapAsync(
-      "MyExampleWebpackPlugin",
+      "CssDtsCheckerWebpackPlugin",
       (compilation, callback) => {
         if (errors.length > 0) {
           //throw new Error(_this.errors.map((err) => err.message || err));
 
-          compilation.errors = [
-            {
-              name: "ss",
-              message: "Hier ist ein Fehler passiert...",
-              details: "",
-              module: "" as any,
-              loc: "" as any,
-              hideStack: false,
-              chunk: false as any,
-              file: "filenam",
-              serialize: () => null,
-              deserialize: () => null,
-            },
-
-            // new Error(errors.map((err) => err.message || err)),
-          ];
+          compilation.errors = errors.map((item) => ({
+            name: "FOOFOFOF",
+            message: `the following styling classes are not used: ${item.messages.join(
+              " "
+            )}`,
+            details: "my deatils",
+            module: "" as any,
+            loc: "" as any,
+            hideStack: false,
+            chunk: false as any,
+            file: item.file,
+            serialize: () => null,
+            deserialize: () => null,
+          }));
         }
-
-        // compilation.errors.push(new Error("explain why the build failed"));
-
-        // Manipulate the build using the plugin API provided by webpack
 
         callback();
       }

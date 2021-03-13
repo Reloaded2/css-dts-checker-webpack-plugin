@@ -1,8 +1,60 @@
 import ts from "typescript";
-import { templateLiteralToCss } from "./utils/template-literal-to-css";
 
-const STYLES_EXTENSION_REGEX = /\.scss/;
 const CSS_PROP = "class";
+
+const getIdentifierText = (
+  node: ts.PropertyName | ts.BindingName | ts.Expression
+): string => {
+  return (
+    ((node as ts.Identifier).escapedText as string) ||
+    (node as ts.Identifier).text
+  );
+};
+
+export const templateLiteralToCss = (
+  node:
+    | ts.TemplateExpression
+    | ts.NoSubstitutionTemplateLiteral
+    | ts.StringLiteral,
+  variableUsage: { name: string; referenceName: string; value: string }[]
+) => {
+  if (ts.isNoSubstitutionTemplateLiteral(node) || ts.isStringLiteral(node)) {
+    return [];
+  }
+
+  const cssVariables: { name: string; value: string }[] = [];
+
+  node.templateSpans.forEach((span) => {
+    const key = getIdentifierText(span.expression);
+
+    if (key !== undefined && variableUsage.length) {
+      variableUsage.forEach((usagedItem) => {
+        if (usagedItem.name === key) {
+          cssVariables.push({
+            name: usagedItem.referenceName,
+            value: usagedItem.value,
+          });
+        }
+      });
+    }
+
+    if (span.expression.getChildCount()) {
+      const variableName = span.expression.getChildAt(2).getText();
+      const variablePrefix = span.expression.getChildAt(0).getText();
+
+      cssVariables.push({ name: variablePrefix, value: variableName });
+    }
+
+    if (ts.isBinaryExpression(span.expression)) {
+      const variableName = span.expression.right.getChildAt(2).getText();
+      const variablePrefix = span.expression.right.getChildAt(0).getText();
+
+      cssVariables.push({ name: variablePrefix, value: variableName });
+    }
+  });
+
+  return cssVariables;
+};
 
 const getJsxNodeAttributes = (
   node: ts.JsxElement | ts.JsxSelfClosingElement
@@ -24,7 +76,7 @@ const getJsxNodeAttributesValue = (
   return attribute?.initializer ? attribute.initializer : undefined;
 };
 
-function visitNode(
+export function visitNode(
   node: ts.Node,
   data: { name: string; value: string }[],
   variableUsage: { name: string; referenceName: string; value: string }[]
@@ -110,68 +162,6 @@ function visitNode(
   return data;
 }
 
-function iteratorToArray(iterator: any): string[] {
+export function iteratorToArray(iterator: any): string[] {
   return Array.from(iterator);
 }
-
-function compile(fileNames: string[], options: ts.CompilerOptions) {
-  const program = ts.createProgram(fileNames, options);
-
-  fileNames.forEach((fileName) => {
-    const sourceFile = program.getSourceFile(fileName);
-    const checker = program.getTypeChecker();
-
-    if (sourceFile !== undefined) {
-      ts.forEachChild(sourceFile, (node) => {
-        // if import declaration
-        if (ts.isImportDeclaration(node)) {
-          const clauses = node.importClause;
-
-          if (clauses !== undefined) {
-            const namedImport = clauses.getChildAt(0);
-            const symbol = checker.getSymbolAtLocation(namedImport);
-
-            const modulePath = node.moduleSpecifier.getText();
-
-            // get only extension
-            if (
-              symbol !== undefined &&
-              STYLES_EXTENSION_REGEX.test(modulePath)
-            ) {
-              // styles variable importanme
-              const importName = symbol.escapedName as string;
-
-              const allTypes = checker.getTypeAtLocation(namedImport);
-
-              const getAllStylesClassesFromDtsFile = allTypes
-                .getSymbol()
-                ?.members?.keys();
-
-              if (getAllStylesClassesFromDtsFile !== undefined) {
-                let allDtsStyles = iteratorToArray(
-                  getAllStylesClassesFromDtsFile
-                );
-
-                const founded = visitNode(sourceFile, [], []);
-
-                // filter founded classes
-                allDtsStyles = allDtsStyles.filter(
-                  (value) =>
-                    !founded.find(
-                      (rm) => rm.value === value && rm.name === importName
-                    )
-                );
-
-                // const foo = ts.forEachChild(sourceFile, visitNode);
-
-                console.log("this css class not used :::", allDtsStyles);
-              }
-            }
-          }
-        }
-      });
-    }
-  });
-}
-
-compile(["./src/example/index.tsx"], {});
