@@ -12,8 +12,6 @@
     "declaration": true,
     "baseUrl": "./src",
     "outDir": "./dist",
-    "forceConsistentCasingInFileNames": true
   },
-  "include": ["./src"],
   "exclude": ["node_modules", "dist"]
 }
