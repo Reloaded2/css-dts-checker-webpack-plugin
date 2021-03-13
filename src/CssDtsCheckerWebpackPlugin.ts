@@ -1,6 +1,7 @@
 import webpack from "webpack";
-import glob from "glob";
+
 import { compile } from "./TsCompiler";
+import { globPromise } from "./utils";
 import path from "path";
 
 interface Options {
@@ -32,33 +33,26 @@ class CssDtsCheckerWebpackPlugin {
     //   `ForkTsCheckerWebpackPlugin is configured to not use any issue reporter. It's probably a configuration issue.`
     // );
 
-    const handle = () => {
-      // _this.errors = [
-      //   { message: "hier ist alles falsch" },
-      //   { message: "und hier ist auch alles flasch" },
-      // ];
-
+    const handle = async () => {
       if (options.files === null) {
         errors = [{ messages: ["files not found"], file: "" }];
       } else {
-        // glob(options.files, {}, (_er, files) => {
+        let allFiles: string[] = [];
+        try {
+          allFiles = await globPromise(options.files, {});
+        } catch (error) {
+          console.log("erro");
+        }
 
-        //   console.log(files);
-        // });
+        if (allFiles.length > 0) {
+          const notFoundedCssClasses = compile(allFiles, {});
 
-        const notFoundedCssClasses = compile(
-          [
-            "./src/Core/components/Tickets/index.tsx",
-            "./src/Core/components/Tickets/index.tsx",
-          ],
-          {}
-        );
-
-        if (notFoundedCssClasses.length > 0) {
-          errors = notFoundedCssClasses.map((item) => ({
-            messages: item.classes,
-            file: item.file,
-          }));
+          if (notFoundedCssClasses.length > 0) {
+            errors = notFoundedCssClasses.map((item) => ({
+              messages: item.classes,
+              file: item.file,
+            }));
+          }
         }
       }
     };
