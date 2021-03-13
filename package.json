@@ -1,5 +1,5 @@
 {
-  "name": "dts-checker",
+  "name": "css-dts-checker-webpack-plugin",
   "version": "1.0.0",
   "description": "",
   "main": "dist/index.js",
