@@ -1,6 +1,6 @@
 {
   "name": "css-dts-checker-webpack-plugin",
-  "version": "1.0.0",
+  "version": "0.3.13",
   "description": "",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -8,8 +8,12 @@
     "dist"
   ],
   "scripts": {
-    "start": "ts-node-dev --respawn ./src/index.ts",
+    "start": "ts-node-dev --respawn ./src/dev.ts",
     "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Reloaded2/css-dts-checker-webpack-plugin.git"
   },
   "author": "Andrej Schneider",
   "license": "MIT",
@@ -27,9 +31,5 @@
   },
   "dependencies": {
     "ts-node-dev": "^1.1.1"
-  },
-  "engines": {
-    "node": ">=10",
-    "yarn": ">=1.0.0"
   }
 }
