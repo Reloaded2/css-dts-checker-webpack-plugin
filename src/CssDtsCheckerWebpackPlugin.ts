@@ -1,11 +1,15 @@
 import webpack from "webpack";
-
 import { compile } from "./TsCompiler";
 import { globPromise } from "./utils";
-import path from "path";
+
+export interface stylesOption {
+  extension: "scss" | "css";
+  jsxAttributeSearchName: string | null;
+}
 
 interface Options {
   files: string | null;
+  stylesOption: stylesOption;
 }
 class CssDtsCheckerWebpackPlugin {
   /**
@@ -16,14 +20,16 @@ class CssDtsCheckerWebpackPlugin {
   private readonly options: Options;
   private readonly errors: { messages: string[]; file: string }[];
 
-  constructor(options: Options = { files: null }, errors: []) {
+  constructor(
+    options: Options = {
+      files: null,
+      stylesOption: { extension: "css", jsxAttributeSearchName: null },
+    },
+    errors: []
+  ) {
     this.options = options || {};
     this.errors = errors || [];
   }
-
-  // public static getCompilerHooks(compiler: webpack.Compiler) {
-  //   return getForkTsCheckerWebpackPluginHooks(compiler);
-  // }
 
   apply(compiler: webpack.Compiler) {
     const options = this.options;
@@ -34,8 +40,11 @@ class CssDtsCheckerWebpackPlugin {
     // );
 
     const handle = async () => {
-      if (options.files === null) {
-        errors = [{ messages: ["files not found"], file: "" }];
+      if (
+        options.files === null ||
+        options.stylesOption.jsxAttributeSearchName === null
+      ) {
+        errors = [{ messages: ["configuration error"], file: "" }];
       } else {
         let allFiles: string[] = [];
         try {
@@ -45,7 +54,7 @@ class CssDtsCheckerWebpackPlugin {
         }
 
         if (allFiles.length > 0) {
-          const notFoundedCssClasses = compile(allFiles, {});
+          const notFoundedCssClasses = compile(allFiles, options.stylesOption);
 
           if (notFoundedCssClasses.length > 0) {
             errors = notFoundedCssClasses.map((item) => ({

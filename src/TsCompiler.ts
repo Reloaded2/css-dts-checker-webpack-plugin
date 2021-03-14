@@ -1,12 +1,13 @@
+import { stylesOption } from "CssDtsCheckerWebpackPlugin";
 import ts from "typescript";
 import { iteratorToArray, visitNode } from "./utils";
 
-const STYLES_EXTENSION_REGEX = /\.scss/;
-
 let notFoundedCssClasses: { file: string; classes: string[] }[] = [];
 
-export function compile(fileNames: string[], options: ts.CompilerOptions) {
-  const program = ts.createProgram(fileNames, options);
+export function compile(fileNames: string[], stylesOption: stylesOption) {
+  const program = ts.createProgram(fileNames, {});
+
+  const STYLES_EXTENSION_REGEX = new RegExp(`.${stylesOption.extension}`);
 
   fileNames.forEach((fileName) => {
     const sourceFile = program.getSourceFile(fileName);
@@ -27,7 +28,8 @@ export function compile(fileNames: string[], options: ts.CompilerOptions) {
             // get only extension
             if (
               symbol !== undefined &&
-              STYLES_EXTENSION_REGEX.test(modulePath)
+              STYLES_EXTENSION_REGEX.test(modulePath) &&
+              stylesOption.jsxAttributeSearchName !== null
             ) {
               // styles variable importanme
               const importName = symbol.escapedName as string;
@@ -43,7 +45,12 @@ export function compile(fileNames: string[], options: ts.CompilerOptions) {
                   getAllStylesClassesFromDtsFile
                 );
 
-                const founded = visitNode(sourceFile, [], []);
+                const founded = visitNode(
+                  sourceFile,
+                  [],
+                  [],
+                  stylesOption.jsxAttributeSearchName
+                );
 
                 // filter founded classes
                 const notFoundenFileClasses = allDtsStyles.filter(

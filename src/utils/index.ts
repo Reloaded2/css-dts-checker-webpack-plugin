@@ -91,7 +91,8 @@ const getJsxNodeAttributesValue = (
 export function visitNode(
   node: ts.Node,
   data: { name: string; value: string }[],
-  variableUsage: { name: string; referenceName: string; value: string }[]
+  variableUsage: { name: string; referenceName: string; value: string }[],
+  jsxAttributeSearchName: string
 ) {
   let referenceName = "";
   let value = "";
@@ -139,7 +140,10 @@ export function visitNode(
   }
 
   if (ts.isJsxElement(node)) {
-    const cssJsxAttribute = getJsxNodeAttributesValue(node, CSS_PROP);
+    const cssJsxAttribute = getJsxNodeAttributesValue(
+      node,
+      jsxAttributeSearchName
+    );
 
     if (cssJsxAttribute !== undefined) {
       if (ts.isStringLiteral(cssJsxAttribute)) {
@@ -168,7 +172,7 @@ export function visitNode(
   }
 
   node.forEachChild((child) => {
-    visitNode(child, data, variableUsage);
+    visitNode(child, data, variableUsage, jsxAttributeSearchName);
   });
 
   return data;
