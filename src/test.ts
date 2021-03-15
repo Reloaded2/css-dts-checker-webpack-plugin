@@ -1,6 +1,6 @@
 import { compile } from "./TsCompiler";
 
-const test = compile(["./examples/Button/index.tsx"], {
+const test = compile(["./examples/ColorPicker/index.tsx"], {
   extension: "css",
   jsxAttributeSearchName: "class",
 });

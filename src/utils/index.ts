@@ -162,7 +162,7 @@ export function visitNode(
 
   // something wring
 
-  if (ts.isJsxElement(node)) {
+  if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
     const cssJsxAttribute = getJsxNodeAttributesValue(
       node,
       jsxAttributeSearchName
