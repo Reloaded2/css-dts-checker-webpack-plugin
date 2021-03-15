@@ -1,6 +1,6 @@
 import webpack from "webpack";
 import { compile } from "./TsCompiler";
-import { globPromise } from "./utils";
+import fastGlob from "fast-glob";
 
 export interface stylesOption {
   extension: "scss" | "css";
@@ -9,6 +9,7 @@ export interface stylesOption {
 
 interface Options {
   files: string | null;
+  ignore: string[];
   stylesOption: stylesOption;
 }
 class CssDtsCheckerWebpackPlugin {
@@ -23,6 +24,7 @@ class CssDtsCheckerWebpackPlugin {
   constructor(
     options: Options = {
       files: null,
+      ignore: [],
       stylesOption: { extension: "css", jsxAttributeSearchName: null },
     },
     errors: []
@@ -48,7 +50,7 @@ class CssDtsCheckerWebpackPlugin {
       } else {
         let allFiles: string[] = [];
         try {
-          allFiles = await globPromise(options.files, {});
+          allFiles = await fastGlob(options.files, { ignore: options.ignore });
         } catch (error) {
           console.log("erro");
         }

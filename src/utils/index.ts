@@ -1,18 +1,4 @@
 import ts from "typescript";
-import glob from "glob";
-
-export const globPromise = function (
-  pattern: string,
-  options: glob.IOptions
-): Promise<string[]> {
-  return new Promise((resolve, reject) => {
-    glob(pattern, options, (err, files) =>
-      err === null ? resolve(files) : reject(err)
-    );
-  });
-};
-
-const CSS_PROP = "class";
 
 const getIdentifierText = (
   node: ts.PropertyName | ts.BindingName | ts.Expression
@@ -28,7 +14,11 @@ export const templateLiteralToCss = (
     | ts.TemplateExpression
     | ts.NoSubstitutionTemplateLiteral
     | ts.StringLiteral,
-  variableUsage: { name: string; referenceName: string; value: string }[]
+  variableUsage: {
+    variableName: string;
+    referenceName: string;
+    value: string;
+  }[]
 ) => {
   if (ts.isNoSubstitutionTemplateLiteral(node) || ts.isStringLiteral(node)) {
     return [];
@@ -41,7 +31,7 @@ export const templateLiteralToCss = (
 
     if (key !== undefined && variableUsage.length) {
       variableUsage.forEach((usagedItem) => {
-        if (usagedItem.name === key) {
+        if (usagedItem.variableName === key) {
           cssVariables.push({
             name: usagedItem.referenceName,
             value: usagedItem.value,
@@ -50,10 +40,22 @@ export const templateLiteralToCss = (
       });
     }
 
-    if (span.expression.getChildCount()) {
-      const variableName = span.expression.getChildAt(2).getText();
-      const variablePrefix = span.expression.getChildAt(0).getText();
+    if (ts.isConditionalExpression(span.expression)) {
+      if (ts.isPropertyAccessExpression(span.expression.whenTrue)) {
+        const variablePrefix = span.expression.whenTrue.expression.getText();
+        const variableName = span.expression.whenTrue.name.getText();
+        cssVariables.push({ name: variablePrefix, value: variableName });
+      }
+      if (ts.isPropertyAccessExpression(span.expression.whenFalse)) {
+        const variablePrefix = span.expression.whenFalse.expression.getText();
+        const variableName = span.expression.whenFalse.name.getText();
+        cssVariables.push({ name: variablePrefix, value: variableName });
+      }
+    }
 
+    if (ts.isPropertyAccessExpression(span.expression)) {
+      const variablePrefix = span.expression.expression.getText();
+      const variableName = span.expression.name.getText();
       cssVariables.push({ name: variablePrefix, value: variableName });
     }
 
@@ -91,7 +93,11 @@ const getJsxNodeAttributesValue = (
 export function visitNode(
   node: ts.Node,
   data: { name: string; value: string }[],
-  variableUsage: { name: string; referenceName: string; value: string }[],
+  variableUsage: {
+    variableName: string;
+    referenceName: string;
+    value: string;
+  }[],
   jsxAttributeSearchName: string
 ) {
   let referenceName = "";
@@ -114,7 +120,7 @@ export function visitNode(
 
       if (referenceName !== "" && value !== "") {
         variableUsage.push({
-          name: variableName,
+          variableName,
           referenceName: referenceName,
           value: value,
         });
@@ -128,16 +134,33 @@ export function visitNode(
   ) {
     const variableName = node.expression.left.getText();
 
+    if (ts.isTemplateExpression(node.expression.right)) {
+      node.expression.right.templateSpans.forEach((span) => {
+        if (ts.isPropertyAccessExpression(span.expression)) {
+          value = span.expression.name.getText();
+          referenceName = span.expression.expression.getText();
+
+          variableUsage.push({
+            variableName,
+            referenceName: referenceName,
+            value: value,
+          });
+        }
+      });
+    }
+
     if (ts.isPropertyAccessExpression(node.expression.right)) {
       value = node.expression.right.name.getText();
       referenceName = node.expression.right.expression.getText();
       variableUsage.push({
-        name: variableName,
+        variableName,
         referenceName: referenceName,
         value: value,
       });
     }
   }
+
+  // something wring
 
   if (ts.isJsxElement(node)) {
     const cssJsxAttribute = getJsxNodeAttributesValue(
@@ -159,7 +182,13 @@ export function visitNode(
           cssJsxAttribute.expression,
           variableUsage
         );
-        data.push(...literalsFound);
+        data.push(
+          ...literalsFound,
+          ...variableUsage.map((item) => ({
+            name: item.referenceName,
+            value: item.value,
+          }))
+        );
       } else {
         if (ts.isJsxExpression(cssJsxAttribute)) {
           // example: styles.hide

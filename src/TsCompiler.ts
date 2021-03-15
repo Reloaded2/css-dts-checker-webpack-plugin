@@ -2,16 +2,19 @@ import { stylesOption } from "CssDtsCheckerWebpackPlugin";
 import ts from "typescript";
 import { iteratorToArray, visitNode } from "./utils";
 
-let notFoundedCssClasses: { file: string; classes: string[] }[] = [];
-
 export function compile(fileNames: string[], stylesOption: stylesOption) {
   const program = ts.createProgram(fileNames, {});
 
   const STYLES_EXTENSION_REGEX = new RegExp(`.${stylesOption.extension}`);
+  let notFoundedCssClasses: { file: string; classes: string[] }[] = [];
 
   fileNames.forEach((fileName) => {
     const sourceFile = program.getSourceFile(fileName);
     const checker = program.getTypeChecker();
+
+    if (sourceFile === undefined) {
+      throw new Error(`Sourcefile: ${fileName} not found`);
+    }
 
     if (sourceFile !== undefined) {
       ts.forEachChild(sourceFile, (node) => {
@@ -52,6 +55,8 @@ export function compile(fileNames: string[], stylesOption: stylesOption) {
                   stylesOption.jsxAttributeSearchName
                 );
 
+                // console.log("founded", founded);
+
                 // filter founded classes
                 const notFoundenFileClasses = allDtsStyles.filter(
                   (value) =>
@@ -60,10 +65,14 @@ export function compile(fileNames: string[], stylesOption: stylesOption) {
                     )
                 );
 
-                notFoundedCssClasses = [
-                  ...notFoundedCssClasses,
-                  { file: fileName, classes: notFoundenFileClasses },
-                ];
+                // console.log("notFoundenFileClasses", notFoundenFileClasses);
+
+                if (notFoundenFileClasses.length > 0) {
+                  notFoundedCssClasses = [
+                    ...notFoundedCssClasses,
+                    { file: fileName, classes: notFoundenFileClasses },
+                  ];
+                }
               }
             }
           }
