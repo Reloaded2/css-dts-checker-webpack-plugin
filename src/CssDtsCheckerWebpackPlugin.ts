@@ -13,11 +13,6 @@ interface Options {
   stylesOption: stylesOption;
 }
 class CssDtsCheckerWebpackPlugin {
-  /**
-   * Current version of the plugin
-   */
-  static readonly version: string = "{{VERSION}}"; // will be replaced by the @semantic-release/exec
-
   private readonly options: Options;
   private readonly errors: { messages: string[]; file: string }[];
 
@@ -36,10 +31,6 @@ class CssDtsCheckerWebpackPlugin {
   apply(compiler: webpack.Compiler) {
     const options = this.options;
     let errors = this.errors;
-
-    // throw new Error(
-    //   `ForkTsCheckerWebpackPlugin is configured to not use any issue reporter. It's probably a configuration issue.`
-    // );
 
     const handle = async () => {
       if (

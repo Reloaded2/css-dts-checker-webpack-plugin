@@ -1,16 +1,20 @@
-import { stylesOption } from "CssDtsCheckerWebpackPlugin";
+import type { stylesOption } from "CssDtsCheckerWebpackPlugin";
 import ts from "typescript";
-import { iteratorToArray, visitNode } from "./utils";
+import { visitNode } from "./utils";
 
 export function compile(fileNames: string[], stylesOption: stylesOption) {
   const program = ts.createProgram(fileNames, {});
+  const checker = program.getTypeChecker();
 
   const STYLES_EXTENSION_REGEX = new RegExp(`.${stylesOption.extension}`);
-  let notFoundedCssClasses: { file: string; classes: string[] }[] = [];
+  let notFoundedCssClasses: {
+    file: string;
+    classes: string[];
+    scope: string;
+  }[] = [];
 
   fileNames.forEach((fileName) => {
     const sourceFile = program.getSourceFile(fileName);
-    const checker = program.getTypeChecker();
 
     if (sourceFile === undefined) {
       throw new Error(`Sourcefile: ${fileName} not found`);
@@ -22,40 +26,30 @@ export function compile(fileNames: string[], stylesOption: stylesOption) {
         if (ts.isImportDeclaration(node)) {
           const clauses = node.importClause;
 
-          if (clauses !== undefined) {
-            const namedImport = clauses.getChildAt(0);
-            const symbol = checker.getSymbolAtLocation(namedImport);
-
-            const modulePath = node.moduleSpecifier.getText();
+          if (clauses !== undefined && clauses.name !== undefined) {
+            const importName = clauses.name.getText();
+            const importPath = node.moduleSpecifier.getText();
 
             // get only extension
             if (
-              symbol !== undefined &&
-              STYLES_EXTENSION_REGEX.test(modulePath) &&
+              STYLES_EXTENSION_REGEX.test(importPath) &&
               stylesOption.jsxAttributeSearchName !== null
             ) {
-              // styles variable importanme
-              const importName = symbol.escapedName as string;
+              let allDtsStyles: string[] = [];
+              const allTypes = checker.getTypeAtLocation(clauses);
 
-              const allTypes = checker.getTypeAtLocation(namedImport);
+              allTypes.getProperties().forEach((x) => {
+                allDtsStyles = [...allDtsStyles, x.getName()];
+              });
 
-              const getAllStylesClassesFromDtsFile = allTypes
-                .getSymbol()
-                ?.members?.keys();
-
-              if (getAllStylesClassesFromDtsFile !== undefined) {
-                const allDtsStyles = iteratorToArray(
-                  getAllStylesClassesFromDtsFile
-                );
-
+              if (allDtsStyles.length > 0) {
                 const founded = visitNode(
                   sourceFile,
                   [],
                   [],
-                  stylesOption.jsxAttributeSearchName
+                  stylesOption.jsxAttributeSearchName,
+                  importName
                 );
-
-                // console.log("founded", founded);
 
                 // filter founded classes
                 const notFoundenFileClasses = allDtsStyles.filter(
@@ -65,12 +59,14 @@ export function compile(fileNames: string[], stylesOption: stylesOption) {
                     )
                 );
 
-                // console.log("notFoundenFileClasses", notFoundenFileClasses);
-
                 if (notFoundenFileClasses.length > 0) {
                   notFoundedCssClasses = [
                     ...notFoundedCssClasses,
-                    { file: fileName, classes: notFoundenFileClasses },
+                    {
+                      file: fileName,
+                      classes: notFoundenFileClasses,
+                      scope: importName,
+                    },
                   ];
                 }
               }
