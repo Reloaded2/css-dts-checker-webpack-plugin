@@ -1,6 +1,7 @@
 import type { stylesOption } from "CssDtsCheckerWebpackPlugin";
 import ts from "typescript";
-import { visitNode } from "./utils";
+import { visitOnlyJsxElements } from "./utils/nodeHelpers";
+import { visitNode } from "./utils/nodeHelpers";
 
 export function compile(fileNames: string[], stylesOption: stylesOption) {
   const program = ts.createProgram(fileNames, {});
@@ -43,13 +44,15 @@ export function compile(fileNames: string[], stylesOption: stylesOption) {
               });
 
               if (allDtsStyles.length > 0) {
-                const founded = visitNode(
+                const { data, jsxExpressionCheck } = visitOnlyJsxElements(
                   sourceFile,
                   [],
                   [],
                   stylesOption.jsxAttributeSearchName,
                   importName
                 );
+
+                const founded = visitNode(sourceFile, data, jsxExpressionCheck);
 
                 // filter founded classes
                 const notFoundenFileClasses = allDtsStyles.filter(

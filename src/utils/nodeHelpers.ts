@@ -1,6 +1,53 @@
 import ts from "typescript";
 import type { foundedCssClassesType, variableUsageType } from "utils";
 
+type jsxExpressionCheck = {
+  type: string;
+  value: string;
+}[];
+
+export const visitOnlyJsxElements = (
+  node: ts.Node,
+  data: foundedCssClassesType,
+  jsxExpressionCheck: jsxExpressionCheck,
+  jsxAttributeSearchName: string,
+  scopeName: string
+) => {
+  // find jsxElement
+  if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
+    const cssJsxAttribute = getJsxNodeAttributesValue(
+      node,
+      jsxAttributeSearchName
+    );
+
+    if (cssJsxAttribute !== undefined) {
+      ({ data, jsxExpressionCheck } = checkJsxAttributeType(
+        cssJsxAttribute,
+        data,
+        jsxExpressionCheck,
+        scopeName
+      ));
+
+      // console.log("HAUA", jsxExpressionCheck);
+
+      // data = value.data;
+      // jsxExpressionCheck = value.jsxExpressionCheck;
+    }
+  }
+
+  node.forEachChild((child) => {
+    visitOnlyJsxElements(
+      child,
+      data,
+      jsxExpressionCheck,
+      jsxAttributeSearchName,
+      scopeName
+    );
+  });
+
+  return { data, jsxExpressionCheck };
+};
+
 const getJsxNodeAttributes = (
   node: ts.JsxElement | ts.JsxSelfClosingElement
 ): ts.JsxAttributes => {
@@ -21,56 +68,60 @@ const getIdentifierText = (
 
 const templateLiteralToClassName = (
   node: ts.TemplateExpression | ts.NoSubstitutionTemplateLiteral,
-  variableUsage: variableUsageType
+  data: foundedCssClassesType,
+  jsxExpressionCheck: jsxExpressionCheck
 ) => {
   if (ts.isNoSubstitutionTemplateLiteral(node)) {
-    return [];
+    return { data, jsxExpressionCheck };
   }
 
-  const cssVariables: { name: string; value: string }[] = [];
-
   node.templateSpans.forEach((span) => {
-    const key = getIdentifierText(span.expression);
+    if (ts.isIdentifier(span.expression)) {
+      const value = span.expression.getText();
 
-    if (key !== undefined && variableUsage.length) {
-      variableUsage.forEach((usagedItem) => {
-        if (usagedItem.variableName === key) {
-          cssVariables.push({
-            name: usagedItem.referenceName,
-            value: usagedItem.value,
-          });
-        }
-      });
+      // dont push same VariableDeclaration
+      if (
+        jsxExpressionCheck.find(
+          (element) =>
+            element.type === "ExpressionStatement" && element.value === value
+        ) === undefined
+      ) {
+        jsxExpressionCheck.push({
+          type: "ExpressionStatement",
+          value: value,
+        });
+      }
     }
+
     if (ts.isConditionalExpression(span.expression)) {
-      if (ts.isPropertyAccessExpression(span.expression.whenTrue)) {
-        const variablePrefix = span.expression.whenTrue.expression.getText();
-        const variableName = span.expression.whenTrue.name.getText();
-        cssVariables.push({ name: variablePrefix, value: variableName });
-      }
-      if (ts.isPropertyAccessExpression(span.expression.whenFalse)) {
-        const variablePrefix = span.expression.whenFalse.expression.getText();
-        const variableName = span.expression.whenFalse.name.getText();
-        cssVariables.push({ name: variablePrefix, value: variableName });
-      }
+      data = isPropertyAccessExpression(span.expression.whenTrue, data);
+      data = isPropertyAccessExpression(span.expression.whenFalse, data);
     }
-
-    if (ts.isPropertyAccessExpression(span.expression)) {
-      const variablePrefix = span.expression.expression.getText();
-      const variableName = span.expression.name.getText();
-      cssVariables.push({ name: variablePrefix, value: variableName });
-    }
+    data = isPropertyAccessExpression(span.expression, data);
 
     if (ts.isBinaryExpression(span.expression)) {
-      if (ts.isPropertyAccessExpression(span.expression.right)) {
-        const variableName = span.expression.right.name.getText();
-        const variablePrefix = span.expression.right.expression.getText();
-        cssVariables.push({ name: variablePrefix, value: variableName });
+      if (ts.isCallExpression(span.expression.right)) {
+        const value = span.expression.right.expression.getText();
+
+        // dont push same callExpresion
+        if (
+          jsxExpressionCheck.find(
+            (element) =>
+              element.type === "callExpresion" && element.value === value
+          ) === undefined
+        ) {
+          jsxExpressionCheck.push({
+            type: "callExpresion",
+            value: value,
+          });
+        }
       }
+
+      data = isPropertyAccessExpression(span.expression.right, data);
     }
   });
 
-  return cssVariables;
+  return { data, jsxExpressionCheck };
 };
 
 export const getJsxNodeAttributesValue = (
@@ -87,7 +138,7 @@ export const getJsxNodeAttributesValue = (
 export const checkJsxAttributeType = (
   cssJsxAttribute: ts.StringLiteral | ts.JsxExpression,
   data: foundedCssClassesType,
-  variableUsage: variableUsageType,
+  jsxExpressionCheck: jsxExpressionCheck,
   scopeName: string
 ) => {
   if (ts.isStringLiteral(cssJsxAttribute)) {
@@ -99,19 +150,25 @@ export const checkJsxAttributeType = (
     ts.isTemplateExpression(cssJsxAttribute.expression) ||
     ts.isNoSubstitutionTemplateLiteral(cssJsxAttribute.expression)
   ) {
-    console.log(cssJsxAttribute.expression.getText());
-
-    const literalsFound = templateLiteralToClassName(
+    ({ data, jsxExpressionCheck } = templateLiteralToClassName(
       cssJsxAttribute.expression,
-      variableUsage
-    );
-    data.push(
-      ...literalsFound,
-      ...variableUsage.map((item) => ({
-        name: item.referenceName,
-        value: item.value,
-      }))
-    );
+      data,
+      jsxExpressionCheck
+    ));
+
+    // ({ data, jsxExpressionCheck } = templateLiteralToClassName(
+    //   cssJsxAttribute.expression,
+    //   data,
+    //   jsxExpressionCheck
+    // ));
+
+    // data.push(
+    //   ...literalsFound
+    //   // ,...variableUsage.map((item) => ({
+    //   //   name: item.referenceName,
+    //   //   value: item.value,
+    //   // }))
+    // );
   } else {
     if (ts.isJsxExpression(cssJsxAttribute)) {
       if (ts.isPropertyAccessExpression(cssJsxAttribute.expression)) {
@@ -123,12 +180,136 @@ export const checkJsxAttributeType = (
         }
       }
       if (ts.isCallExpression(cssJsxAttribute.expression)) {
-        console.log("TODO HERE....");
+        const value = cssJsxAttribute.expression.expression.getText();
 
-        // TODO
+        jsxExpressionCheck.push({
+          type: "callExpresion",
+          value: value,
+        });
       }
     }
   }
 
+  return { data, jsxExpressionCheck };
+};
+
+const isTemplateExpression = (
+  node: ts.Expression,
+  data: foundedCssClassesType
+) => {
+  if (ts.isTemplateExpression(node)) {
+    node.templateSpans.forEach((span) => {
+      if (ts.isPropertyAccessExpression(span.expression)) {
+        const value = span.expression.name.getText();
+        const name = span.expression.expression.getText();
+        data.push({
+          name,
+          value,
+        });
+      }
+    });
+  }
   return data;
 };
+
+const isVariableStatement = (node: ts.Node, data: foundedCssClassesType) => {
+  if (ts.isVariableStatement(node)) {
+    const [declaration] = node.declarationList.declarations;
+    if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+      data = isTemplateExpression(declaration.initializer, data);
+      data = isPropertyAccessExpression(declaration.initializer, data);
+      data = isElementAccessExpression(declaration.initializer, data);
+    }
+  }
+  return data;
+};
+
+const isPropertyAccessExpression = (
+  node: ts.Expression | ts.Node,
+  data: foundedCssClassesType
+) => {
+  if (ts.isPropertyAccessExpression(node)) {
+    const value = node.name.getText();
+    const name = node.expression.getText();
+    data.push({
+      name,
+      value,
+    });
+  }
+  return data;
+};
+
+const isElementAccessExpression = (
+  node: ts.Expression,
+  data: foundedCssClassesType
+) => {
+  if (ts.isElementAccessExpression(node)) {
+    const name = node.expression.getText();
+    const value = node.argumentExpression.getText();
+    data.push({
+      name,
+      value,
+    });
+  }
+  return data;
+};
+
+function visitChildren(node: ts.Node, data: foundedCssClassesType) {
+  data = isPropertyAccessExpression(node, data);
+
+  if (
+    ts.isExpressionStatement(node) &&
+    ts.isBinaryExpression(node.expression)
+  ) {
+    data = isTemplateExpression(node.expression.right, data);
+    data = isPropertyAccessExpression(node.expression.right, data);
+  }
+  data = isVariableStatement(node, data);
+
+  node.forEachChild((child) => {
+    visitChildren(child, data);
+  });
+  return data;
+}
+
+export function visitNode(
+  node: ts.Node,
+  data: foundedCssClassesType,
+  jsxExpressionCheck: jsxExpressionCheck
+) {
+  jsxExpressionCheck.forEach((jsxExpression) => {
+    // isFunctionDeclaration
+    if (
+      ts.isFunctionDeclaration(node) &&
+      jsxExpression.type === "callExpresion" &&
+      node.name?.getText() === jsxExpression.value
+    ) {
+      if (node.body !== undefined) {
+        if (ts.isBlock(node.body)) {
+          data = visitChildren(node.body, data);
+        }
+      }
+    }
+
+    // ExpressionStatement
+    if (
+      ts.isExpressionStatement(node) &&
+      ts.isBinaryExpression(node.expression) &&
+      jsxExpression.type === "ExpressionStatement" &&
+      node.expression.left.getText() === jsxExpression.value
+    ) {
+      data = isTemplateExpression(node.expression.right, data);
+      data = isPropertyAccessExpression(node.expression.right, data);
+    }
+
+    if (jsxExpression.type === "ExpressionStatement") {
+      data = isVariableStatement(node, data);
+    }
+  });
+
+  node.forEachChild((child) => {
+    visitNode(child, data, jsxExpressionCheck);
+  });
+
+  return data;
+}

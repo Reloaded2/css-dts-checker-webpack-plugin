@@ -7,7 +7,7 @@ const test = async () => {
 
   try {
     allFiles = await fastGlob(
-      path.join(__dirname, "../", "examples/Button", "**/*.tsx"),
+      path.join(__dirname, "../", "examples/Textarea", "**/*.tsx"),
       {
         ignore: ["**/*.test.tsx"],
       }
