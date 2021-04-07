@@ -52,6 +52,8 @@ export function compile(fileNames: string[], stylesOption: stylesOption) {
                   importName
                 );
 
+                console.log("jsxExpressionCheck", jsxExpressionCheck);
+
                 const founded = visitNode(sourceFile, data, jsxExpressionCheck);
 
                 // filter founded classes

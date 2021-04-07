@@ -69,7 +69,8 @@ const getIdentifierText = (
 const templateLiteralToClassName = (
   node: ts.TemplateExpression | ts.NoSubstitutionTemplateLiteral,
   data: foundedCssClassesType,
-  jsxExpressionCheck: jsxExpressionCheck
+  jsxExpressionCheck: jsxExpressionCheck,
+  scopeName: string
 ) => {
   if (ts.isNoSubstitutionTemplateLiteral(node)) {
     return { data, jsxExpressionCheck };
@@ -90,6 +91,25 @@ const templateLiteralToClassName = (
           type: "ExpressionStatement",
           value: value,
         });
+      }
+    }
+
+    if (ts.isElementAccessExpression(span.expression)) {
+      const identifier = span.expression.expression.getText();
+
+      if (identifier === scopeName) {
+        if (ts.isPropertyAccessExpression(span.expression.argumentExpression)) {
+          // jsxExpressionCheck.push({
+          //   type: "TypeAliasDeclaration",
+          //   value: "",
+          // });
+
+          console.log(
+            "::::::",
+            span.expression.argumentExpression.expression.getText(),
+            span.expression.argumentExpression.name.getText()
+          );
+        }
       }
     }
 
@@ -153,7 +173,8 @@ export const checkJsxAttributeType = (
     ({ data, jsxExpressionCheck } = templateLiteralToClassName(
       cssJsxAttribute.expression,
       data,
-      jsxExpressionCheck
+      jsxExpressionCheck,
+      scopeName
     ));
 
     // ({ data, jsxExpressionCheck } = templateLiteralToClassName(
@@ -279,6 +300,7 @@ export function visitNode(
 ) {
   jsxExpressionCheck.forEach((jsxExpression) => {
     // isFunctionDeclaration
+
     if (
       ts.isFunctionDeclaration(node) &&
       jsxExpression.type === "callExpresion" &&
