@@ -7,7 +7,7 @@ const test = async () => {
 
   try {
     allFiles = await fastGlob(
-      path.join(__dirname, "../", "examples/Loader", "**/*.tsx"),
+      path.join(__dirname, "../", "examples", "**/*.tsx"),
       {
         ignore: ["**/*.test.tsx"],
       }
@@ -21,6 +21,8 @@ const test = async () => {
       extension: "css",
       jsxAttributeSearchName: "class",
     });
+
+    // ignore: ["Icon/components/FolderIcon/index.tsx"]
 
     if (notFoundedCssClasses.length > 0) {
       console.log(notFoundedCssClasses);

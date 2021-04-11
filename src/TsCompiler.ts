@@ -52,9 +52,14 @@ export function compile(fileNames: string[], stylesOption: stylesOption) {
                   importName
                 );
 
-                console.log("jsxExpressionCheck", jsxExpressionCheck);
+                const founded = visitNode(
+                  sourceFile,
+                  data,
+                  jsxExpressionCheck,
+                  importName
+                );
 
-                const founded = visitNode(sourceFile, data, jsxExpressionCheck);
+                // console.log("founded", founded);
 
                 // filter founded classes
                 const notFoundenFileClasses = allDtsStyles.filter(

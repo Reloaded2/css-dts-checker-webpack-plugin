@@ -2,8 +2,9 @@ import ts from "typescript";
 import type { foundedCssClassesType, variableUsageType } from "utils";
 
 type jsxExpressionCheck = {
-  type: string;
+  tsNode: string;
   value: string;
+  type?: string;
 }[];
 
 export const visitOnlyJsxElements = (
@@ -27,11 +28,6 @@ export const visitOnlyJsxElements = (
         jsxExpressionCheck,
         scopeName
       ));
-
-      // console.log("HAUA", jsxExpressionCheck);
-
-      // data = value.data;
-      // jsxExpressionCheck = value.jsxExpressionCheck;
     }
   }
 
@@ -84,11 +80,11 @@ const templateLiteralToClassName = (
       if (
         jsxExpressionCheck.find(
           (element) =>
-            element.type === "ExpressionStatement" && element.value === value
+            element.tsNode === "ExpressionStatement" && element.value === value
         ) === undefined
       ) {
         jsxExpressionCheck.push({
-          type: "ExpressionStatement",
+          tsNode: "ExpressionStatement",
           value: value,
         });
       }
@@ -99,25 +95,34 @@ const templateLiteralToClassName = (
 
       if (identifier === scopeName) {
         if (ts.isPropertyAccessExpression(span.expression.argumentExpression)) {
-          // jsxExpressionCheck.push({
-          //   type: "TypeAliasDeclaration",
-          //   value: "",
-          // });
+          jsxExpressionCheck.push({
+            tsNode: "TypeAliasDeclaration",
+            value: span.expression.argumentExpression.name.getText(),
+            type: span.expression.argumentExpression.expression.getText(),
+          });
 
-          console.log(
-            "::::::",
-            span.expression.argumentExpression.expression.getText(),
-            span.expression.argumentExpression.name.getText()
-          );
+          // console.log(
+          //   ":::::: TODO: ",
+          //   span.expression.argumentExpression.expression.getText(),
+          //   span.expression.argumentExpression.name.getText()
+          // );
         }
       }
     }
 
     if (ts.isConditionalExpression(span.expression)) {
-      data = isPropertyAccessExpression(span.expression.whenTrue, data);
-      data = isPropertyAccessExpression(span.expression.whenFalse, data);
+      data = isPropertyAccessExpression(
+        span.expression.whenTrue,
+        data,
+        scopeName
+      );
+      data = isPropertyAccessExpression(
+        span.expression.whenFalse,
+        data,
+        scopeName
+      );
     }
-    data = isPropertyAccessExpression(span.expression, data);
+    data = isPropertyAccessExpression(span.expression, data, scopeName);
 
     if (ts.isBinaryExpression(span.expression)) {
       if (ts.isCallExpression(span.expression.right)) {
@@ -127,17 +132,17 @@ const templateLiteralToClassName = (
         if (
           jsxExpressionCheck.find(
             (element) =>
-              element.type === "callExpresion" && element.value === value
+              element.tsNode === "callExpresion" && element.value === value
           ) === undefined
         ) {
           jsxExpressionCheck.push({
-            type: "callExpresion",
+            tsNode: "callExpresion",
             value: value,
           });
         }
       }
 
-      data = isPropertyAccessExpression(span.expression.right, data);
+      data = isPropertyAccessExpression(span.expression.right, data, scopeName);
     }
   });
 
@@ -204,7 +209,7 @@ export const checkJsxAttributeType = (
         const value = cssJsxAttribute.expression.expression.getText();
 
         jsxExpressionCheck.push({
-          type: "callExpresion",
+          tsNode: "callExpresion",
           value: value,
         });
       }
@@ -233,12 +238,20 @@ const isTemplateExpression = (
   return data;
 };
 
-const isVariableStatement = (node: ts.Node, data: foundedCssClassesType) => {
+const isVariableStatement = (
+  node: ts.Node,
+  data: foundedCssClassesType,
+  scopeName: string
+) => {
   if (ts.isVariableStatement(node)) {
     const [declaration] = node.declarationList.declarations;
     if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
       data = isTemplateExpression(declaration.initializer, data);
-      data = isPropertyAccessExpression(declaration.initializer, data);
+      data = isPropertyAccessExpression(
+        declaration.initializer,
+        data,
+        scopeName
+      );
       data = isElementAccessExpression(declaration.initializer, data);
     }
   }
@@ -247,15 +260,19 @@ const isVariableStatement = (node: ts.Node, data: foundedCssClassesType) => {
 
 const isPropertyAccessExpression = (
   node: ts.Expression | ts.Node,
-  data: foundedCssClassesType
+  data: foundedCssClassesType,
+  scopeName: string
 ) => {
   if (ts.isPropertyAccessExpression(node)) {
     const value = node.name.getText();
     const name = node.expression.getText();
-    data.push({
-      name,
-      value,
-    });
+
+    if (scopeName !== undefined && name === scopeName) {
+      data.push({
+        name,
+        value,
+      });
+    }
   }
   return data;
 };
@@ -275,20 +292,24 @@ const isElementAccessExpression = (
   return data;
 };
 
-function visitChildren(node: ts.Node, data: foundedCssClassesType) {
-  data = isPropertyAccessExpression(node, data);
+function visitChildren(
+  node: ts.Node,
+  data: foundedCssClassesType,
+  scopeName: string
+) {
+  data = isPropertyAccessExpression(node, data, scopeName);
 
   if (
     ts.isExpressionStatement(node) &&
     ts.isBinaryExpression(node.expression)
   ) {
     data = isTemplateExpression(node.expression.right, data);
-    data = isPropertyAccessExpression(node.expression.right, data);
+    data = isPropertyAccessExpression(node.expression.right, data, scopeName);
   }
-  data = isVariableStatement(node, data);
+  data = isVariableStatement(node, data, scopeName);
 
   node.forEachChild((child) => {
-    visitChildren(child, data);
+    visitChildren(child, data, scopeName);
   });
   return data;
 }
@@ -296,19 +317,20 @@ function visitChildren(node: ts.Node, data: foundedCssClassesType) {
 export function visitNode(
   node: ts.Node,
   data: foundedCssClassesType,
-  jsxExpressionCheck: jsxExpressionCheck
+  jsxExpressionCheck: jsxExpressionCheck,
+  scopeName: string
 ) {
   jsxExpressionCheck.forEach((jsxExpression) => {
     // isFunctionDeclaration
 
     if (
       ts.isFunctionDeclaration(node) &&
-      jsxExpression.type === "callExpresion" &&
+      jsxExpression.tsNode === "callExpresion" &&
       node.name?.getText() === jsxExpression.value
     ) {
       if (node.body !== undefined) {
         if (ts.isBlock(node.body)) {
-          data = visitChildren(node.body, data);
+          data = visitChildren(node.body, data, scopeName);
         }
       }
     }
@@ -317,20 +339,70 @@ export function visitNode(
     if (
       ts.isExpressionStatement(node) &&
       ts.isBinaryExpression(node.expression) &&
-      jsxExpression.type === "ExpressionStatement" &&
+      jsxExpression.tsNode === "ExpressionStatement" &&
       node.expression.left.getText() === jsxExpression.value
     ) {
       data = isTemplateExpression(node.expression.right, data);
-      data = isPropertyAccessExpression(node.expression.right, data);
+      data = isPropertyAccessExpression(node.expression.right, data, scopeName);
     }
 
-    if (jsxExpression.type === "ExpressionStatement") {
-      data = isVariableStatement(node, data);
+    if (jsxExpression.tsNode === "ExpressionStatement") {
+      data = isVariableStatement(node, data, scopeName);
+    }
+
+    if (jsxExpression.tsNode === "TypeAliasDeclaration") {
+      if (ts.isTypeAliasDeclaration(node)) {
+        const identifier = node.name.getText();
+
+        if (identifier === jsxExpression.type) {
+          if (ts.isTypeLiteralNode(node.type)) {
+            node.type.members.forEach((member) => {
+              if (ts.isPropertySignature(member)) {
+                const name = member.name.getText();
+
+                if (name === jsxExpression.value && member.type !== undefined) {
+                  member.type.forEachChild((child) => {
+                    if (ts.isLiteralTypeNode(child)) {
+                      const value = child.literal
+                        .getText()
+                        .replace(/[^a-zA-Z0-9]+/g, "");
+
+                      data.push({
+                        name: scopeName,
+                        value,
+                      });
+                    }
+                  });
+                }
+              }
+            });
+          }
+        }
+
+        // const [declaration] = node.declarationList.declarations;
+        // if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+        //   data = isTemplateExpression(declaration.initializer, data);
+        //   data = isPropertyAccessExpression(declaration.initializer, data);
+        //   data = isElementAccessExpression(declaration.initializer, data);
+        // }
+      }
     }
   });
 
+  data = isPropertyAccessExpression(node, data, scopeName);
+
+  // //huhu
+  // if (ts.isPropertyAccessExpression(node)) {
+  //   if (node.expression.getText() === scopeName) {
+  //     console.log("xx", node.name.getText());
+  //     // console.log("dsfsdf", node.expression.getText());
+  //   }
+  //   // const value = node.name.getText();
+  //   // const name = node.expression.getText();
+  // }
+
   node.forEachChild((child) => {
-    visitNode(child, data, jsxExpressionCheck);
+    visitNode(child, data, jsxExpressionCheck, scopeName);
   });
 
   return data;
